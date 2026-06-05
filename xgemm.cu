@@ -22,13 +22,18 @@ __global__ void matMult(float *A, float *B, float *C, int n)
 {
     int row = blockIdx.y * blockDim.y + threadIdx.y;
     int col = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (row >= n || col >= n)
+    {
+        return;
+    }
+
     float sum = 0.0f;
     for (int k = 0; k < n; k++)
     {
         sum += A[row * n + k] * B[k * n + col];
     }
     C[row * n + col] = sum;
-    printf("%f\n", sum);
 }
 
 void initMat(float *A, int n)
@@ -46,7 +51,7 @@ int main()
     float *B = nullptr;
     float *C = nullptr;
 
-    int n = 32;
+    int n = 1024;
 
     CUDA_CHECK(cudaMallocManaged(&A, n * n * sizeof(float)));
     CUDA_CHECK(cudaMallocManaged(&B, n * n * sizeof(float)));
@@ -55,12 +60,34 @@ int main()
     initMat(A, n * n);
     initMat(B, n * n);
 
-    dim3 threads(n, n);
+    dim3 threads(32, 32);
     dim3 blocks(n / 32, n / 32);
 
-    matMult<<<blocks, threads>>>(A, B, C, 32);
+    cudaStream_t stream;
+    cudaStreamCreate(&stream);
+    cudaEvent_t start;
+    cudaEvent_t stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+
+    cudaEventRecord(start, stream);
+
+    matMult<<<blocks, threads, 0, stream>>>(A, B, C, n);
+    cudaEventRecord(stop, stream);
     CUDA_CHECK(cudaGetLastError());
-    CUDA_CHECK(cudaDeviceSynchronize());
+    CUDA_CHECK(cudaStreamSynchronize(stream));
+
+    float elapsedTime;
+    cudaEventElapsedTime(&elapsedTime, start, stop);
+    std::cout << "Kernel execution time: " << elapsedTime << " ms\n";
+
+    float timeInSeconds = elapsedTime / 1000.0f;
+    float gflops = (2.0 * n * n * n) / (timeInSeconds * 1e9f);
+    std::cout << "GFLOPS: " << gflops << '\n';
+
+    cudaEventDestroy(start);
+    cudaEventDestroy(stop);
+    cudaStreamDestroy(stream);
 
     cudaFree(A);
     cudaFree(B);
