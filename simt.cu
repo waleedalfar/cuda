@@ -70,6 +70,10 @@ int main()
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
 
+    matMult<<<blocks, threads, 0, stream>>>(A, B, C, n);
+    cudaDeviceSynchronize();
+    cudaMemset(C, 0, 1024 * 1024 * sizeof(float));
+
     cudaEventRecord(start, stream);
 
     matMult<<<blocks, threads, 0, stream>>>(A, B, C, n);

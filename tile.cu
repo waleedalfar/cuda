@@ -82,14 +82,14 @@ int main()
     initMat(B, n * n);
 
     // allocate for gpu
-    cudaMalloc(&devA, matSize * sizeof(float));
-    cudaMalloc(&devB, matSize * sizeof(float));
-    cudaMalloc(&devC, matSize * sizeof(float));
+    CUDA_CHECK(cudaMalloc(&devA, matSize * sizeof(float)));
+    CUDA_CHECK(cudaMalloc(&devB, matSize * sizeof(float)));
+    CUDA_CHECK(cudaMalloc(&devC, matSize * sizeof(float)));
 
     // copy data to the GPU
-    cudaMemcpy(devA, A, matSize * sizeof(float), cudaMemcpyDefault);
-    cudaMemcpy(devB, B, matSize * sizeof(float), cudaMemcpyDefault);
-    cudaMemset(devC, 0, matSize * sizeof(float));
+    CUDA_CHECK(cudaMemcpy(devA, A, matSize * sizeof(float), cudaMemcpyDefault));
+    CUDA_CHECK(cudaMemcpy(devB, B, matSize * sizeof(float), cudaMemcpyDefault));
+    CUDA_CHECK(cudaMemset(devC, 0, matSize * sizeof(float)));
 
     dim3 threads(32, 32);
     dim3 blocks(n / 32, n / 32);
@@ -100,6 +100,13 @@ int main()
     cudaEvent_t stop;
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
+
+    // warmup
+    tileMult<<<blocks, threads, 0, stream>>>(devA, devB, devC, n);
+    cudaDeviceSynchronize();
+
+    // reset
+    cudaMemset(devC, 0, matSize * sizeof(float));
 
     cudaEventRecord(start, stream);
 
@@ -120,7 +127,11 @@ int main()
     cudaEventDestroy(stop);
     cudaStreamDestroy(stream);
 
-    cudaFree(A);
-    cudaFree(B);
-    cudaFree(C);
+    cudaFreeHost(A);
+    cudaFreeHost(B);
+    cudaFreeHost(C);
+
+    cudaFree(devA);
+    cudaFree(devB);
+    cudaFree(devC);
 }
